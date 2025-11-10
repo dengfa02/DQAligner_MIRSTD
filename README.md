@@ -1,7 +1,7 @@
 
 # *<center>Learning Global Dynamic Query for Large-Motion Infrared Small Target Detection</center>*
 
-If you find this paper helpful and inspiring, please cite the following format:
+If you find this paper helpful and inspiring, please cite the following format
 ```
 @article{DQAligner,
   author = {Chuiyi Deng, Yanin Guo, Xiang Xu, Zhuoyi Zhao, Yixin Xia, Junwei Li, Antonio Plaza},
