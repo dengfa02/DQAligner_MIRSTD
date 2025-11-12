@@ -4,7 +4,7 @@
 If you find this paper helpful and inspiring, please cite the following format
 ```
 @article{DQAligner,
-  author = {Chuiyi Deng, Yanin Guo, Xiang Xu, Zhuoyi Zhao, Yixin Xia, Junwei Li, Antonio Plaza},
+  author = {Chuiyi Deng, Yanin Guo, Xiang Xu, Zhuoyi Zhao, Yixin Xia, Runxuan An, Junwei Li, Antonio Plaza},
   title = {Learning Global Dynamic Query for Large-Motion Infrared Small Target Detection},
   year = {2025},
 }
