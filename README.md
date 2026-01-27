@@ -8,7 +8,7 @@ This repository contains the algorithm done in the work Learning Global Dynamic 
 @article{DQAligner,
   author = {Chuiyi Deng, Yanin Guo, Xiang Xu, Zhuoyi Zhao, Yixin Xia, Runxuan An, Junwei Li, Antonio Plaza},
   title = {Learning Global Dynamic Query for Large-Motion Infrared Small Target Detection},
-  year = {2025},
+  year = {2026},
 }
 ```
 
