@@ -1,26 +1,16 @@
 import argparse
-import torch
-import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
-import torch.optim as optim
-import matplotlib.pyplot as plt
-from torch.optim.lr_scheduler import StepLR
 from numpy import *
-import numpy as np
-import scipy.io as scio
-import time
-import os
 import os.path as osp
 from tqdm import tqdm
 from PIL import Image
-
+import time
 from MIRSDTDataLoader import TrainSetLoader, TestSetLoader
 from IRDSTDataLoader import IRDST_TrainSetLoader, IRDST_TestSetLoader
 from utils.metric_basic import *
 from utils.loss import *
 from model.DQAligner import *
-import cv2
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 torch.autograd.set_detect_anomaly(True)
@@ -29,30 +19,26 @@ torch.autograd.set_detect_anomaly(True)
 def parse_args():
     """Training Options for Segmentation Experiments"""
     parser = argparse.ArgumentParser(description='Infrared_target_detection_overall')
-    parser.add_argument('--DataPath', type=str, default='/data/dcy/', help='Dataset path [default: ./dataset/]')
+    parser.add_argument('--DataPath', type=str, default='./dataset/', help='Dataset path [default: ./dataset/]')
     parser.add_argument('--dataset', type=str, default='NUDT-MIRSDT',
                         help='Dataset name [dafult: NUDT-MIRSDT],IRDST,TSIRMT')
     parser.add_argument('--saveDir', type=str, default='./results/', help='Save path [defaule: ./results/]')
     parser.add_argument('--weight_path', type=str,
-                        default='results/IRDST/DQAligner/weight_IRDST.pth',
+                        default='results/NUDT-MIRSDT/DQAligner/weight_NUDT-MIRSDT.pth',
                         help='model weight path')
 
     # train
     parser.add_argument('--model', type=str,
-                        default='!_test_visual',
+                        default='DQAligner_test_visual',
                         # 网络结构改了以后改这里名称即可
                         help='ResUNet_DTUM, DNANet_DTUM, ACM, ALCNet, ResUNet, DNANet, ISNet, UIU')
     parser.add_argument('--fullySupervised', default=True)
     parser.add_argument('--SpatialDeepSup', default=False)
-    parser.add_argument('--batchsize', type=int, default=2)
-    parser.add_argument('--epochs', type=int, default=30)
-    parser.add_argument('--save_img', type=bool, default=False)
+    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--save_img', type=bool, default=False)  # 保存图像
     # loss & optimize
     parser.add_argument('--loss_func', type=str, default='adafocal',
                         help='HPM, FocalLoss, OHEM, fullySup, softiou, focal, focaliou, adafocal')
-    parser.add_argument('--optimizer', type=str, default='adam', help='adam, adamw, c_adamw')
-    parser.add_argument('--lrate', type=float, default=5e-4)  # 1e-3 5e-4
-    parser.add_argument('--lrate_min', type=float, default=1e-5)
     parser.add_argument("--seed", type=int, default=42, help="seed")
     # GPU
     parser.add_argument('--DataParallel', default=False, help='Use one gpu or more')
@@ -116,10 +102,7 @@ class Trainer(object):
         # model
         self.net = DQAligner(input_channels=1, num_frames=5, train_mode=True,
                              key_mode='last')  # Baseline_2D  , key_mode='mid'
-        # self.net = SSTUNet()
         if args.DataParallel:
-            # base_lr = base_lr * 4.0
-            # self.net = torch.nn.SyncBatchNorm.convert_sync_batchnorm(self.net)
             self.net = nn.DataParallel(self.net, device_ids=[0, 1]).cuda()  # , device_ids=[0,1,2]).cuda()
         self.net = self.net.to(self.device)
 
@@ -139,7 +122,7 @@ class Trainer(object):
         self.F_metric = F_metric(nclass=1)
         self.PD_FA_cur = PD_FA()
         self.mIoU_cur = mIoU()
-        self.ROC_cur = ROCMetric(1, 20)  # 训练时可不评估ROC，测试时评估20-50个阈值
+        self.ROC_cur = ROCMetric(1, 20)
         self.F_metric_cur = F_metric(nclass=1)
 
         self.best_fmeasure = 0
@@ -172,10 +155,9 @@ class Trainer(object):
             txt = np.loadtxt(self.test_path + 'ImageSets/' + 'val_new.txt', dtype=bytes).astype(str)
         self.net.eval()
 
-        cat_flag = 0  # 测试开始时提取每帧特征
-        feat_prop = None  # interface for iteration input
+        cat_flag = 0
+        feat_prop = None
         tbar = tqdm(self.val_loader)
-        current_video = None
         for i, data in enumerate(tbar, 0):
             with torch.no_grad():
                 if args.dataset == 'NUDT-MIRSDT':
@@ -188,16 +170,15 @@ class Trainer(object):
 
                 time_start = time.time()
                 outputs = self.net(SeqData, feat_prop, cat_flag, False)
-                # outputs = self.net(SeqData)
                 time_end = time.time()
                 self.fps_list.append(1 / (time_end - time_start))
 
                 if isinstance(outputs, (list, tuple)):
                     pred = outputs[1].squeeze(2)
-                    feat_prop = outputs[2]  # 之前提取过的历史帧特征 b,c,t-1,h,w
+                    feat_prop = outputs[2]
                 else:
                     pred = outputs
-                cat_flag = 1  # 同一个视频顺序滑窗推理时拼接之前提取过的历史帧特征
+                cat_flag = 1
 
                 Outputs_Max = torch.sigmoid(pred)
                 TestOut = Outputs_Max.data.cpu().numpy()[0, 0, 0:m, 0:n]
@@ -228,34 +209,6 @@ class Trainer(object):
                 self.ROC.update(Outputs_Max[:, :, 0:m, 0:n].cpu(), TgtData[:, :, :m, :n].cpu())
                 results = self.mIoU.get()
                 tbar.set_description('Epoch %d, IoU %.4f' % (epoch, results[1]))
-
-                """视频变化时评估上一个视频指标"""
-                self.mIoU_cur.update((Outputs_Max[:, :, 0:m, 0:n].cpu() > 0.5),
-                                     TgtData[:, :, :m, :n].cpu())  # 输入均为1,1,h,w
-                self.PD_FA_cur.update((Outputs_Max[0, 0, 0:m, 0:n].cpu() > 0.5), TgtData[0, 0, :m, :n].cpu(),
-                                      # 输入为h,w
-                                      (m, n))
-                self.F_metric_cur.update((Outputs_Max[:, :, 0:m, 0:n].cpu() > 0.5), TgtData[:, :, :m, :n].cpu())
-                # self.ROC_cur.update(Outputs_Max[:, :, 0:m, 0:n].cpu(), TgtData[:,:,:m,:n].cpu())
-                if current_video is not None and current_video != video_name[0] or i == len(self.val_loader) - 1:
-                    cat_flag = 0  # 当视频名称变化时计算前一个视频的指标，且新视频开头需要重新提取每帧特征
-                    results1 = self.mIoU_cur.get()
-                    results2 = self.PD_FA_cur.get()
-                    prec, recall, fmeasure = self.F_metric_cur.get()
-
-                    if args.mode == 'train':
-                        with open(osp.join(self.SavePath, 'metric_train.log'), 'a') as f:
-                            f.write(f"Current Video {current_video} Results: \n")
-                            f.write('{} - {:03d}\t - IoU {:.5f}\t - F1 {:.5f}\t - PD {:.5f}\t - FA {:.5f}\n'.
-                                    format(time.strftime('%Y-%m-%d-%H-%M-%S', time.localtime(time.time())),
-                                           epoch, results1[1], fmeasure, results2[0], results2[1] * 1e6))
-
-                    self.mIoU_cur.reset()
-                    self.PD_FA_cur.reset()
-                    self.F_metric_cur.reset()
-                    # self.ROC_cur.reset()
-
-                current_video = video_name[0]
 
         print('FPS=%.3f', np.mean(self.fps_list))
 
@@ -312,7 +265,7 @@ if __name__ == '__main__':
         diff_count = 0
         for (name_a, param_a), (name_b, param_b) in zip(model_a.state_dict().items(), model_b.state_dict().items()):
             if not torch.allclose(param_a, param_b, atol=1e-6):
-                print(f"⚠️ Weight different: {name_a}")
+                print(f"Weight different: {name_a}")
                 diff_count += 1
         print(f"Total different params: {diff_count}")
 

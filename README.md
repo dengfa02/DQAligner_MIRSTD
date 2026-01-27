@@ -1,7 +1,9 @@
 
 # *<center>Learning Global Dynamic Query for Large-Motion Infrared Small Target Detection</center>*
 
-If you find this paper helpful and inspiring, please cite the following format
+This repository contains the algorithm done in the work Learning Global Dynamic Query for Large-Motion Infrared Small Target Detection by Chuiyi Deng et al.
+
+**News**:Thanks to the efforts of the editor and all the reviewers, our work has been accepted by IEEE TGRS 2026. If you find this paper helpful and inspiring, please cite the following format:
 ```
 @article{DQAligner,
   author = {Chuiyi Deng, Yanin Guo, Xiang Xu, Zhuoyi Zhao, Yixin Xia, Runxuan An, Junwei Li, Antonio Plaza},
@@ -15,7 +17,7 @@ If you find this paper helpful and inspiring, please cite the following format
 <img src="./figs/fig2.png" alt="Structure" style="width: 800px; height: auto;">
 
 ## Structure
-to be updated...
+<img src="./figs/fig3.png" alt="Structure" style="width: 800px; height: auto;">
 
 ## Results
 <img src="./figs/fig4.png" alt="Results" style="width: 800px; height: auto;">
@@ -45,7 +47,7 @@ DCN Compiling
 3. See `test.py` for example usage.
 
 ## Commands for Training
-* Run `train.py` to perform network training. Example for training on [dataset_name] datasets:
+* Run `train.py` to perform network training. Example for training on `[dataset_name]` datasets:
   ```
   $ cd ./codes
   $ python train.py --dataset 'IRDST'
@@ -54,7 +56,7 @@ DCN Compiling
 <be>
 
 ## Commands for Test
-* Run `test.py` to perform network inference. Example for test on [dataset_name] datasets:
+* Run `test.py` to perform network inference. Example for test on `[dataset_name]` datasets:
   ```
   $ cd ./codes
   $ python test.py --dataset 'IRDST' --weight_path 'results/IRDST/DQAligner/weight_IRDST.pth' --save_img False

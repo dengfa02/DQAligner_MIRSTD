@@ -54,13 +54,10 @@ class augmentation(object):
         if random.random() < 0.5:
             input = input[:, :, :, ::-1]
             target = target[:, :, ::-1]
-        # if random.random() < 0.5:
-        #     input = input[::-1, :, :, :]
-        #     target = target[::-1, :, :, :]不要时间翻转
         if random.random() < 0.5:
             input = input.transpose(0, 1, 3, 2)
             target = target.transpose(0, 2, 1)
-        if self.aug_large and random.random() < 0.2:  # 20%的概率应用大位移  # 修改0.5原0.2
+        if self.aug_large and random.random() < 0.2:
             # 获取关键帧
             if self.key_mode == 'mid':
                 last_frame = input[2, :, :, :]
@@ -99,7 +96,6 @@ class TrainSetLoader(Dataset):
 
         # Read Mix
         MixData_mat = scio.loadmat(img_path_mix)
-        # try except: MixData_mat = scio.loadmat(img_path_mix, verify_compressed_data_integrity=False)
 
         MixData_Img = MixData_mat.get('Mix')  # MatData
         MixData_Img = MixData_Img.astype(np.float32)
@@ -135,7 +131,6 @@ class TrainSetLoader(Dataset):
             mask_pad = np.zeros([1, 512, 512])
             LabelData_Img = LabelData_Img[np.newaxis, :, :]
             MixData_out = np.array(MixData_out)
-            # img_aug, mask_aug = self.tranform(np.array(MixData_out), LabelData_Img)
 
             _, _, actH, actW = MixData_out.shape  # MixData_out, img_aug
             img_pad[:, :, 0:actH, 0:actW] = MixData_out  # img_aug MixData_out
@@ -145,15 +140,6 @@ class TrainSetLoader(Dataset):
 
             return img_pad, mask_pad, m_L, n_L  # mask_pad[2]
 
-            # [n, t, m_M, n_M] = shape(MixData_out)
-            # LabelData_Img_1 = np.zeros([512, 512])
-            # LabelData_Img_1[0:m_L, 0:n_L] = LabelData_Img
-            # LabelData = torch.from_numpy(LabelData_Img_1)
-            # TgtData_out = torch.unsqueeze(LabelData, 0)
-            # MixData_out_1 = torch.zeros([n, t, 512, 512])
-            # MixData_out_1[0:n, 0:t, 0:m_M, 0:n_M] = MixData_out
-            # return MixData_out_1, TgtData_out, m_L, n_L
-
     def __len__(self):
         return len(self.imgs_arr)
 
@@ -161,7 +147,7 @@ class TrainSetLoader(Dataset):
 class TestSetLoader(Dataset):
     def __init__(self, root, fullSupervision=False):
 
-        txtpath = root + 'test.txt'  # test_snr_smaller_than_3.txt  test.txt
+        txtpath = root + 'test.txt'
         txt = np.loadtxt(txtpath, dtype=bytes).astype(str)
         self.imgs_arr = txt
         self.root = root
@@ -178,7 +164,6 @@ class TestSetLoader(Dataset):
 
         # Read Label/Tgt
         img_path_tgt = img_path_mix.replace('.mat', '.png')
-        # print(img_path_mix)
         if self.fullSupervision:
             img_path_tgt = img_path_tgt.replace('Mix', 'masks')
             LabelData_Img = Image.open(img_path_tgt)

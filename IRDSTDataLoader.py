@@ -43,8 +43,6 @@ def random_crop_seq(img_seq, mask_seq, patch_size):
                                        mode='constant')
             _, h, w = img_seq.shape
 
-    # cur_prob = random.random()
-
     if mask_seq.max() == 0:
         h_start = random.randint(0, h - patch_size)
         w_start = random.randint(0, w - patch_size)
@@ -90,7 +88,7 @@ class augmentation(object):
         center = (w // 2, h // 2)
         M = cv2.getRotationMatrix2D(center, angle, scale)
         M[0, 2] += dx
-        M[1, 2] += dy  #w/o LSA
+        M[1, 2] += dy
         # # 构建平移矩阵
         # M = np.float32([[1, 0, dx], [0, 1, dy]])
         # 应用平移缩放与旋转
@@ -117,19 +115,7 @@ class augmentation(object):
         if random.random() < 0.5:
             input = input.transpose(0, 1, 3, 2)
             target = target.transpose(0, 1, 3, 2)
-        if self.aug_large and random.random() < 0.1:  # 20%的概率应用大位移  # 修改0.5原0.2
-            # """随机挑选一帧应用大位移"""
-            # # 随机挑选帧索引（假设总共 5 帧）
-            # rand_idx = random.randint(0, input.shape[0] - 1)
-            #
-            # sel_frame = input[rand_idx, :, :, :]
-            # sel_mask = target[rand_idx, :, :, :]
-            #
-            # shifted_img, shifted_mask = self.apply_global_shift(sel_frame, sel_mask, max_shift=100)
-            #
-            # input[rand_idx, :, :, :] = torch.from_numpy(shifted_img)
-            # target[rand_idx, :, :, :] = torch.from_numpy(shifted_mask)
-
+        if self.aug_large and random.random() < 0.1:
             # 获取关键帧
             if self.key_mode == 'mid':
                 last_frame = input[2, :, :, :]
@@ -145,16 +131,6 @@ class augmentation(object):
             else:
                 input[-1, :, :, :] = torch.from_numpy(shifted_img)
                 target[-1, :, :, :] = torch.from_numpy(shifted_mask)
-
-            # # --- 以50%概率随机挑选一个历史帧增强 ---
-            # if random.random() < 0.5:
-            #     rand_idx = random.randint(0, input.shape[0] - 2)  # 历史帧索引范围：[0,3]
-            #     hist_frame = input[rand_idx, :, :, :]
-            #     hist_mask = target[rand_idx, :, :, :]
-            #
-            #     shifted_img, shifted_mask = self.apply_global_shift(hist_frame, hist_mask, max_shift=100)
-            #     input[rand_idx, :, :, :] = torch.from_numpy(shifted_img)
-            #     target[rand_idx, :, :, :] = torch.from_numpy(shifted_mask)
 
         return input, target
 
@@ -189,9 +165,6 @@ class IRDST_TrainSetLoader(Dataset):
                                                            frames]  # 移除扩展名.png
                 self.imgs_arr.extend([('dataset', video_name, frame_index) for frame_index in range(len(frames))])
 
-                # self.frames_info['dataset'][video_name] = [frame_path.split('\\')[-1][:-4] for frame_path in frames]
-                # self.img_ids.extend([('dataset', video_name, frame_index) for frame_index in range(len(frames))])
-
     def __getitem__(self, index):
         img_ids_i = self.imgs_arr[index]
         dataset, video_name, frame_index = img_ids_i
@@ -205,7 +178,6 @@ class IRDST_TrainSetLoader(Dataset):
             frame_indices = [(x + vid_len) % vid_len for x in
                              range(frame_index - self.num_frames + 1, frame_index + 1, 1)]
         """last"""
-
         assert len(frame_indices) == self.num_frames
 
         frame_ids = []
@@ -228,49 +200,32 @@ class IRDST_TrainSetLoader(Dataset):
             gt = np.expand_dims(gt / 255.0, axis=0)
             mask_list.append(gt)  # c,1,h,w
 
-        # masks = torch.from_numpy(masks_list)
-        # imgs = torch.from_numpy(img_list)
-
         _, h, w = mask_list[-1].shape
         if h == 512 and w == 512:
             # Tgt preprocess
             img_list, mask_list = self.tranform(np.array(img_list), np.array(mask_list))  # t,c,h,w
             img = torch.from_numpy(np.ascontiguousarray(img_list)).float()
             mask = torch.from_numpy(np.ascontiguousarray(mask_list)).float()
-            # img = torch.Tensor(img)
-            # mask = torch.Tensor(mask).float()
             if self.key_mode == 'mid':
                 return img.permute(1, 0, 2, 3), mask[2], h, w, frame_ids[2]
             else:
                 return img.permute(1, 0, 2, 3), mask[-1], h, w, frame_ids[-1]  # , mask[-1] frame_ids[-1]
 
         else:
-            # Tgt preprocess
-            # mask_pad = np.zeros([512, 512])
-            # mask_pad[0:h, 0:w] = mask_list[-1]  # 前4帧都是历史，用来估计最后一帧
-            # mask_pad = torch.from_numpy(np.expand_dims(mask_pad, axis=0)).float()
             img_pad = np.zeros([self.num_frames, 1, 512, 512])
             mask_pad = np.zeros([self.num_frames, 1, 512, 512])
             """先增强后pad"""  # pad必须hw一致否则不同样本无法堆叠形成一个batch
             img = np.stack(img_list, axis=0)  # [t,c,h,w]
             mask = np.stack(mask_list, axis=0)
-            # img, mask = random_crop_seq(img, mask, patch_size=128)  # crop128
             img_aug, mask_aug = self.tranform(img, mask)  # t,c,h,w
 
             _, _, actH, actW = img_aug.shape
             img_pad[:, :, 0:actH, 0:actW] = img_aug
             mask_pad[:, :, 0:actH, 0:actW] = mask_aug
 
-            """先pad后增强"""
-            # for i in range(self.num_frames):
-            #     img_pad[i, 0, 0:h, 0:w] = img_list[i]
-            #     mask_pad[i, 0, 0:h, 0:w] = mask_list[i]
-            #
-            # img_pad, mask_pad = self.tranform(img_pad, mask_pad)
             img_pad = torch.from_numpy(np.ascontiguousarray(img_pad)).float()
             mask_pad = torch.from_numpy(np.ascontiguousarray(mask_pad)).float()
 
-            # img_pad = torch.Tensor(img_pad).float()
             if self.key_mode == 'mid':
                 return img_pad.permute(1, 0, 2, 3), mask_pad[2], h, w, frame_ids[2]  # mask_pad[2]
             else:
@@ -283,7 +238,7 @@ class IRDST_TrainSetLoader(Dataset):
 class IRDST_TestSetLoader(Dataset):
     def __init__(self, root, num_frames=5, fullSupervision=True, key_mode='last'):
         self.num_frames = num_frames
-        self.txtpath = root + 'ImageSets/val_new.txt'  # # val_snr_smaller_than_3.txt  val_new.txt
+        self.txtpath = root + 'ImageSets/val_new.txt'
         self.img_path = root + 'images/'
         self.mask_path = root + 'masks/'
         self.imgs_arr = []
@@ -291,7 +246,6 @@ class IRDST_TestSetLoader(Dataset):
         self.fullSupervision = fullSupervision
         self.test_mean = 94.96572
         self.test_std = 37.13109
-        # self._transforms = make_train_transform(train_size=train_size)
         self.frames_info = {
             'dataset': {}
         }
@@ -311,7 +265,6 @@ class IRDST_TestSetLoader(Dataset):
         img_ids_i = self.imgs_arr[index]
         dataset, video_name, frame_index = img_ids_i
         vid_len = len(self.frames_info[dataset][video_name])
-        # center_frame_name = self.frames_info[dataset][video_name][frame_index]
         """mid"""
         if self.key_mode == 'mid':
             frame_indices = [(x + vid_len) % vid_len for x in
@@ -342,9 +295,6 @@ class IRDST_TestSetLoader(Dataset):
             gt = np.expand_dims(gt / 255.0, axis=0)
             mask_list.append(torch.Tensor(gt))  # c,1,h,w
 
-        # masks = torch.from_numpy(masks_list)
-        # imgs = torch.from_numpy(img_list)
-
         _, h, w = mask_list[-1].shape
         if h == 512 and w == 512:
             # Tgt preprocess
@@ -353,31 +303,22 @@ class IRDST_TestSetLoader(Dataset):
             if self.key_mode == 'mid':
                 return img.permute(1, 0, 2, 3), mask[2], h, w, frame_ids[2]
             else:
-                return img.permute(1, 0, 2, 3), mask[-1], h, w, frame_ids[-1]  # , mask[-1] frame_ids[-1]
+                return img.permute(1, 0, 2, 3), mask[-1], h, w, frame_ids[-1]
 
         else:
-            # Tgt preprocess
-
             mask_pad = np.zeros([512, 512])
             if self.key_mode == 'mid':
-                mask_pad[0:h, 0:w] = mask_list[2]  # 前4帧都是历史，用来估计最后一帧
+                mask_pad[0:h, 0:w] = mask_list[2]
             else:
-                mask_pad[0:h, 0:w] = mask_list[-1]  # 前4帧都是历史，用来估计最后一帧
+                mask_pad[0:h, 0:w] = mask_list[-1]
             mask_pad = np.expand_dims(mask_pad, axis=0)
             img_pad = torch.zeros([self.num_frames, 1, 512, 512])
-            # img_pad = []
             for i in range(self.num_frames):
-                # pad512or256
                 img_pad[i, 0, 0:h, 0:w] = img_list[i]
                 # pad32
                 # img = PadImg(img_list[i][0], 32)
                 # img_pad.append(np.expand_dims(img, axis=0))
 
-            # img_pad = np.stack(img_pad, axis=0)  # [t,c,h,w]
-            # mask_pad = PadImg(mask_list[-1][0], 32)
-            # mask_pad = torch.from_numpy(np.expand_dims(mask_pad, axis=0)).float()
-
-            # img_pad = torch.Tensor(img_pad).float()
             img_pad = torch.from_numpy(np.ascontiguousarray(img_pad)).float()
             mask_pad = torch.from_numpy(np.ascontiguousarray(mask_pad)).float()
             if self.key_mode == 'mid':
@@ -387,15 +328,3 @@ class IRDST_TestSetLoader(Dataset):
 
     def __len__(self):
         return len(self.imgs_arr)
-
-
-if __name__ == '__main__':
-    from torch.autograd import Variable
-    from torch.utils.data import DataLoader
-
-    train_dataset = IRDST_TrainSetLoader('/data/dcy/IRDST/', fullSupervision=True, key_mode='mid')
-    train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True, drop_last=False,
-                              num_workers=0, pin_memory=True)  # 调试时改0
-
-    for i, data in enumerate(train_loader):
-        SeqData_t, TgtData_t, m, n, _ = data

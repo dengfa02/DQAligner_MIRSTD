@@ -1,14 +1,9 @@
 import argparse
-import torch
-import torch.nn as nn
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 import torch.optim as optim
-import matplotlib.pyplot as plt
 from torch.optim.lr_scheduler import StepLR, CosineAnnealingLR
 from numpy import *
-import numpy as np
-import scipy.io as scio
 import time
 import os
 import os.path as osp
@@ -19,10 +14,7 @@ from MIRSDTDataLoader import TrainSetLoader, TestSetLoader
 from IRDSTDataLoader import IRDST_TrainSetLoader, IRDST_TestSetLoader
 from utils.metric_basic import *
 from utils.loss import *
-from utils.AutomaticWeightedLoss import AutomaticWeightedLoss
-from utils.c_adamw import AdamW as C_AdamW
-from model.Ablation_CQM_actL1L2L3 import *
-import cv2
+from model.DQAligner import *
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 torch.autograd.set_detect_anomaly(True)
@@ -31,7 +23,7 @@ torch.autograd.set_detect_anomaly(True)
 def parse_args():
     """Training Options for Segmentation Experiments"""
     parser = argparse.ArgumentParser(description='Infrared_target_detection_overall')
-    parser.add_argument('--DataPath', type=str, default='/data/dcy/', help='Dataset path [default: ./dataset/]')
+    parser.add_argument('--DataPath', type=str, default='./dataset/', help='Dataset path [default: ./dataset/]')
     parser.add_argument('--dataset', type=str, default='IRDST', help='Dataset name [dafult: NUDT-MIRSDT],IRDST,TSIRMT')
     parser.add_argument('--saveDir', type=str, default='./results/', help='Save path [defaule: ./results/]')
     parser.add_argument('--weight_path', type=str,
@@ -39,12 +31,12 @@ def parse_args():
                         help='Trained model path')
     # train
     parser.add_argument('--model', type=str,
-                        default='Ablation/CQM/act_L1L2L3',
+                        default='DQAligner',
                         # 网络结构改了以后改这里名称即可
                         help='ResUNet_DTUM, DNANet_DTUM, ACM, ALCNet, ResUNet, DNANet, ISNet, UIU')
     parser.add_argument('--fullySupervised', default=True)  # 分割形状全监督,或者点监督
     parser.add_argument('--SpatialDeepSup', default=False)  # 网络深度监督
-    parser.add_argument('--batchsize', type=int, default=2)  # 90D-4 90-2 多卡DP获取相同效果只需保持batch与学习率不变即可，DDPbatch/num_gpus
+    parser.add_argument('--batchsize', type=int, default=2)
     parser.add_argument('--epochs', type=int, default=20)  # 总epochs包含了5轮warmup+15轮train
     parser.add_argument('--save_img', type=bool, default=False)  # 保存可视化结果
     # loss & optimize
@@ -58,7 +50,6 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42, help="seed")
     # GPU
     parser.add_argument('--DataParallel', default=False, help='Use one gpu or more')
-    # parser.add_argument('--device', type=str, default="cuda:3", help='use comma for multiple gpus')
     # mode
     parser.add_argument('--mode', default='train', help='train or test')
 
@@ -140,43 +131,17 @@ class Trainer(object):
         self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False, num_workers=0,
                                      pin_memory=False)
 
-        # self.criterion = loss_chose(args)
-        if args.loss_func == 'focal':
-            self.loss_fun = FocalLoss()
-        elif args.loss_func == 'focal_dice':
-            self.loss_fun1 = FocalLoss()
-            self.loss_fun2 = DiceLoss()
-        elif args.loss_func == 'focal_dice_awl':
-            self.loss_fun1 = FocalLoss()
-            self.loss_fun2 = DiceLoss()
-            self.awl = AutomaticWeightedLoss(2).to(self.device)
-        elif args.loss_func == 'focal_dice_motion_awl':
-            self.loss_fun1 = FocalLoss()
-            self.loss_fun2 = DiceLoss()
-            self.awl = AutomaticWeightedLoss(3).to(self.device)
-        elif args.loss_func == 'focal_dice_motion':
-            self.loss_fun1 = FocalLoss()
-            self.loss_fun2 = DiceLoss()
-        elif args.loss_func == 'softiou':
-            self.loss_fun = SoftIoULoss()
-        elif args.loss_func == 'focaliou':
-            self.loss_fun = FocalIoULoss()
-        elif args.loss_func == 'adafocal':
+        if args.loss_func == 'adafocal':
             self.loss_fun = AdaFocalLoss()
 
-        if args.optimizer.lower() == "adamw":
-            self.optimizer = optim.AdamW(self.net.parameters(), lr=base_lr, weight_decay=0,
-                                         betas=(0.9, 0.999))
-        elif args.optimizer.lower() == "c_adamw":
-            self.optimizer = C_AdamW(self.net.parameters(), lr=base_lr, weight_decay=0, betas=(0.9, 0.999))
-        elif args.optimizer.lower() == "adam":
-            self.optimizer = optim.Adam(self.net.parameters(), lr=base_lr, betas=(0.9, 0.999))  # 0.999? 原0.99
+        if args.optimizer.lower() == "adam":
+            self.optimizer = optim.Adam(self.net.parameters(), lr=base_lr, betas=(0.9, 0.999))
         elif args.optimizer.lower() == "adam" and (
             args.loss_func == 'focal_dice_awl' or args.loss_func == 'focal_dice_motion_awl'):
             self.optimizer = optim.Adam([{'params': self.net.parameters()},
                                          {'params': self.awl.parameters()}], lr=base_lr,
-                                        betas=(0.9, 0.999))  # 0.999? 原0.99
-        self.scheduler = StepLR(self.optimizer, step_size=5, gamma=0.2, last_epoch=-1)  # 每隔5个epoch调整一次0.2x学习率5step
+                                        betas=(0.9, 0.999))
+        self.scheduler = StepLR(self.optimizer, step_size=5, gamma=0.2, last_epoch=-1)
 
         self.PD_FA = PD_FA()
         self.mIoU = mIoU()
@@ -225,14 +190,10 @@ class Trainer(object):
                 ds_flag = False
             outputs = self.net(SeqData, None, 0, ds_flag)  # x, feat_prop, cat_flag
             loss = 0
-            dice_loss = 0
-            att_loss = 0
-            # outputs = self.net(SeqData)
+
             if isinstance(outputs, (list, tuple)):
                 deep_mask = outputs[0]
                 pred = outputs[1].squeeze(2)  # 融合关键帧特征 b,c,h,w
-                att_list = outputs[-2]
-                track_loss = outputs[-1]
                 if args.SpatialDeepSup:
                     loss = loss + self.loss_fun(pred, TgtData.float())
                     for j in range(len(deep_mask)):
@@ -242,13 +203,11 @@ class Trainer(object):
                                                     TgtData.float())  # , self.warm_epoch, epoch
                     loss = loss / (len(deep_mask) + 1)
                 else:
-                    loss = self.loss_fun(pred, TgtData.float())# + 0.25 * att_loss# + dice_loss# + track_loss  # org focal+ 0.2*mask_loss
-                    # loss = loss1 + backloss / (backloss / loss1 + 1e-6).detach()  # + motionloss+ backloss
+                    loss = self.loss_fun(pred, TgtData.float())
             else:
                 pred = outputs
                 loss = self.loss_fun(pred, TgtData.float())
 
-            # loss = self.loss_fun(pred, TgtData.float())
             loss.backward()
             # 可增加梯度裁剪
             torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=1.0)
@@ -425,12 +384,10 @@ if __name__ == '__main__':
     trainer = Trainer(args)
     if args.mode == 'train':
         for epoch in range(args.epochs):
-            # trainer.validation(epoch)  # 测试指标代码用
             trainer.training(epoch)
-            if (epoch + 1) % 1 == 0:  # 修改
+            if (epoch + 1) % 1 == 0:
                 trainer.validation(epoch)
                 trainer.savemodel(epoch)
-        # trainer.savemodel()
         trainer.saveloss()
         print('finished training!')
     if args.mode == 'test':
