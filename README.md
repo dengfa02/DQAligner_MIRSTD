@@ -5,10 +5,12 @@ This repository contains the algorithm done in the work Learning Global Dynamic 
 
 **News**:Thanks to the efforts of the editor and all the reviewers, our work has been accepted by IEEE TGRS 2026. If you find this paper helpful and inspiring, please cite the following format:
 ```
-@article{DQAligner,
-  author = {Chuiyi Deng, Yanin Guo, Xiang Xu, Zhuoyi Zhao, Yixin Xia, Runxuan An, Junwei Li, Antonio Plaza},
-  title = {Learning Global Dynamic Query for Large-Motion Infrared Small Target Detection},
-  year = {2026},
+@article{deng2026learning,
+  title={Learning Global Dynamic Query for Large--Motion Infrared Small Target Detection},
+  author={Deng, Chuiyi and Guo, Yanyin and Xu, Xiang and Zhao, Zhuoyi and Xia, Yixin and An, Runxuan and Li, Junwei and Plaza, Antonio},
+  journal={IEEE Transactions on Geoscience and Remote Sensing},
+  year={2026},
+  publisher={IEEE}
 }
 ```
 
@@ -35,6 +37,11 @@ IRDST [Download](https://github.com/lifier/LMAFormer)
 [Weight](results/NUDT-MIRSDT/DQAligner/weight_NUDT-MIRSDT/) for NUDT-MIRSDT
 
 [Weight](results/IRDST/DQAligner/weight_IRDST/) for IRDST
+
+**Update**: In `train.py`, `args.SpatialDeepSup` defaults to `False`. We recommend training without spatial deep supervision, as it may cause conflicts between deep and shallow Query learning.
+Additionally, the `track_loss` returned by `DQAligner.py`  is also disabled by default, since we found that enabling it may reduce the flexibility of Query learning in representing features across frames. However, readers may refer to it for further performance optimization.
+
+Thanks to Ruojing Li for the suggestion!
 
 ## Requirements
 - Python 3.8
