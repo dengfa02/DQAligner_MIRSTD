@@ -34,9 +34,9 @@ IRDST [Download](https://github.com/lifier/LMAFormer)
 
 **Weights**: 
 
-[Weight](./results/NUDT-MIRSDT/DQAligner/weight_NUDT-MIRSDT/) for NUDT-MIRSDT
+[Weight](./results/NUDT-MIRSDT/DQAligner/weight_NUDT-MIRSDT.pth) for NUDT-MIRSDT
 
-[Weight](./results/IRDST/DQAligner/weight_IRDST/) for IRDST
+[Weight](./results/IRDST/DQAligner/weight_IRDST.pth) for IRDST
 
 **Update**: In `train.py`, `args.SpatialDeepSup` defaults to `False`. We recommend training without spatial deep supervision, as it may cause conflicts between deep and shallow Query learning.
 Additionally, the `track_loss` returned by `DQAligner.py`  is also disabled by default, since we found that enabling it may reduce the flexibility of Query learning in representing features across frames. However, readers may refer to it for further performance optimization.
