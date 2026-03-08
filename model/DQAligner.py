@@ -450,13 +450,14 @@ class DQAligner(nn.Module):
         align_feat_frame = self.temporal_attn(align_feat_frame)
 
         if ds_flag:
-            mask0 = self.output_0(out_l1)
-            mask1 = self.output_1(out_l2)
-            mask2 = self.output_2(out_l3)
-            output = self.final(
-                torch.cat([mask0.squeeze(2), self.up(mask1.squeeze(2)), self.up_4(mask2.squeeze(2))], dim=1))
+            print('Deep supervision will result in an error!')
+            # mask0 = self.output_0(out_l1)
+            # mask1 = self.output_1(out_l2)
+            # mask2 = self.output_2(out_l3)
+            # output = self.final(
+            #     torch.cat([mask0.squeeze(2), self.up(mask1.squeeze(2)), self.up_4(mask2.squeeze(2))], dim=1))
 
-            return [mask0, mask1, mask2], output, feat_prop
+            # return [mask0, mask1, mask2], output, feat_prop
 
         else:
             output = self.output3d_0(align_feat_frame)

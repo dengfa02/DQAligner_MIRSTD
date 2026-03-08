@@ -184,26 +184,26 @@ class Trainer(object):
                 self.device)  # b,c,t,m,n  // b,1,m.n
 
             self.optimizer.zero_grad()
-            if args.SpatialDeepSup:
-                ds_flag = True  # 训练时使用深度监督
-            else:
-                ds_flag = False
+            # if args.SpatialDeepSup:
+            #     ds_flag = True  # 训练时使用深度监督
+            # else:
+            ds_flag = False  # 默认不使用深度监督
             outputs = self.net(SeqData, None, 0, ds_flag)  # x, feat_prop, cat_flag
             loss = 0
 
             if isinstance(outputs, (list, tuple)):
                 deep_mask = outputs[0]
                 pred = outputs[1].squeeze(2)  # 融合关键帧特征 b,c,h,w
-                if args.SpatialDeepSup:
-                    loss = loss + self.loss_fun(pred, TgtData.float())
-                    for j in range(len(deep_mask)):
-                        if j > 0:
-                            TgtData = F.interpolate(TgtData, scale_factor=0.5, mode='nearest')
-                        loss = loss + self.loss_fun(deep_mask[j].squeeze(2),
-                                                    TgtData.float())  # , self.warm_epoch, epoch
-                    loss = loss / (len(deep_mask) + 1)
-                else:
-                    loss = self.loss_fun(pred, TgtData.float())
+                # if args.SpatialDeepSup:
+                #     loss = loss + self.loss_fun(pred, TgtData.float())
+                #     for j in range(len(deep_mask)):
+                #         if j > 0:
+                #             TgtData = F.interpolate(TgtData, scale_factor=0.5, mode='nearest')
+                #         loss = loss + self.loss_fun(deep_mask[j].squeeze(2),
+                #                                     TgtData.float())  # , self.warm_epoch, epoch
+                #     loss = loss / (len(deep_mask) + 1)
+                # else:
+                loss = self.loss_fun(pred, TgtData.float())
             else:
                 pred = outputs
                 loss = self.loss_fun(pred, TgtData.float())
